@@ -14,9 +14,9 @@ dist/
 .venv
 .venv/*
 .python-version
-.env
-.env/*
-.workflow/tools/dorado-0.5.3-linux-x64
+env
+env/*
+workflow/tools/dorado-0.5.3-linux-x64
 
 .idea
 
