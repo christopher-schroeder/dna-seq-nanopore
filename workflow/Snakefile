@@ -1,0 +1,219 @@
+import pandas as pd
+import os
+
+BASEDIR = os.path.dirname(workflow.snakefile)
+REFERENCE = "results/resources/genome.dna.homo_sapiens.GRCh38.105.fasta"
+
+include: "rules/common.smk"
+include: "rules/basecalling.smk"
+include: "rules/mapping.smk"
+include: "rules/reference.smk"
+include: "rules/snp_calling.smk"
+include: "rules/sv_calling.smk"
+include: "rules/str_calling.smk"
+#include: "rules/methyl.smk"
+include: "rules/annotate.smk"
+include: "rules/visualization.smk"
+
+wildcard_constraints:
+    group="|".join(groups),
+    sample="|".join(sample_names),
+
+# all_input = [f"results/basecalls/{row['sample_name']}.{row['unit_name']}.ubam" for _, row in units.iterrows()]
+
+
+rule all:
+    input:
+        # expand("results/str/{sample}.annotated.bed", sample=units["sample_name"]),
+        # expand("results/snps/{sample}.annotated.vcf.gz", sample=units["sample_name"]),
+        # expand("results/sv_snf/{sample}.snf", sample=units["sample_name"]),
+        # expand("results/sv/{group}.vcf", group=groups),
+        #expand("results/alignment/{sample}.cram", sample=units["sample_name"]),
+        # expand("results/sv/{group}.annotated.bcf", group=groups),
+        # expand("results/sv/{group}.annotated.repeats.bcf", group=groups)
+        #expand("results/tables/{group}.sv.tsv", group=groups),
+        expand("results/tables/{sample}.str.tsv", sample=units["sample_name"]),
+        # expand("results/str/{sample}.annotated.vep.bcf", sample=units["sample_name"]),
+        # expand("results/snps/{sample}.vcf.gz", sample=units["sample_name"]),
+        # expand("results/methylation/{sample}_1.bed", sample=units["sample_name"]),
+
+rule only_mapping_avail:
+    input:
+        lambda _: expand("results/alignment/{sample}.cram", sample=glob_wildcards("results/basecalls_sample/{sample}.ubam").sample),
+
+rule only_basecalling:
+    input:
+        expand("results/basecalls_sample/{sample}.ubam", sample=units["sample_name"])
+
+
+# checkpoint make_chunks:
+#     threads:
+#         1
+#     input:
+#         xam="results/alignment/{sample}.cram",
+#         xam_index="results/alignment/{sample}.cram.crai",
+#         model="results/resources/r1041_e82_400bps_hac_v410.tar.gz", #lambda wc: f"results/resources/{select_model("dna_r10.4.1_e8.2_400bps_hac@v4.1.0")}.tar.gz",
+#         reference=REFERENCE,
+#     output:
+#         contigs="results/clair3/{sample}/tmp/CONTIGS",
+#         chunks="results/clair3/{sample}/tmp/CHUNK_LIST",
+#         command="results/clair3/{sample}/tmp/CMD",
+#     params:
+#         clair3_prefix="results/clair3/{sample}/",
+#         sample_name="{sample}",
+#         vcf_fn="EMPTY",
+#         ctg_name="EMPTY",
+#         include_all_ctgs="false",
+#         min_qual=2,
+#         var_pct_full=0.7,
+#         ref_pct_full=0.1,
+#         snp_min_af=0.08,
+#         indel_min_af=0.15,
+#         min_contig_size=0,
+#         bed_args="",
+#         model_path="results/resources/r1041_e82_400bps_hac_v410",
+#     conda:
+#         "envs/clair3.yaml"
+#     shell:
+#         """
+#         # CW-2456: save command line to add to VCF file (very long command...)
+#         mkdir -p clair_output/tmp
+#         echo "run_clair3.sh --bam_fn={input.xam} --ref_fn={input.reference} --vcf_fn={params.vcf_fn} --output=clair_output --platform=ont --sample_name={params.sample_name} --model_path={params.model_path} --ctg_name={params.ctg_name} --include_all_ctgs={params.include_all_ctgs} --chunk_num=0 --chunk_size=5000000 --qual={params.min_qual} --var_pct_full={params.var_pct_full} --ref_pct_full={params.ref_pct_full} --snp_min_af={params.snp_min_af} --indel_min_af={params.indel_min_af} --min_contig_size={params.min_contig_size}" > {output.cmd}
+#         # CW-2456: prepare other inputs normally
+#         python $(which clair3.py) CheckEnvs \
+#             --bam_fn {input.xam} \
+#             {params.bed_args} \
+#             --output_fn_prefix {params.clair3_prefix} \
+#             --ref_fn {input.reference} \
+#             --vcf_fn {params.vcf_fn} \
+#             --ctg_name {params.ctg_name} \
+#             --chunk_num 0 \
+#             --chunk_size 5000000 \
+#             --include_all_ctgs {params.include_all_ctgs} \
+#             --threads {threads}  \
+#             --qual {params.min_qual} \
+#             --sampleName {params.sample_name} \
+#             --var_pct_full {params.var_pct_full} \
+#             --ref_pct_full {params.ref_pct_full} \
+#             --snp_min_af {params.snp_min_af} \
+#             --indel_min_af {params.indel_min_af} \
+#             --min_contig_size {params.min_contig_size} \
+#             --cmd_fn {output.command}
+#         """
+
+# rule pileup_variants:
+#     threads:
+#         1
+#     input:
+#         xam="results/alignment/{sample}.cram",
+#         xam_index="results/alignment/{sample}.cram.crai",
+#         model="results/resources/r1041_e82_400bps_hac_v410",
+#         reference=REFERENCE,
+#         index="results/resources/genome.dna.homo_sapiens.GRCh38.105.fasta.mmi",
+#         command="results/clair3/{sample}/tmp/CMD",
+#     output:
+#         vcf="results/clair3/pileup/{sample}/{sample}.{contig}.{chunk_id}_of_{total_chunks}.vcf",
+#     params:
+#         snp_min_af=0.08,
+#         indel_min_af=0.15,
+#         min_mq=5,
+#         min_cov=2,
+#         gvcf="results/clair3/pileup/{sample}.{contig}.{chunk_id}_of_{total_chunks}.gvcf",
+#         gvcf_tmp_path="results/gvcf/{sample}.{contig}.{chunk_id}_of_{total_chunks}/tmp",
+#     conda:
+#         "envs/clair3.yaml"
+#     shell:
+#         # // note: the VCF output here is required to use the contig
+#         # //       name since that's parsed in the SortVcf step
+#         # // note: snp_min_af and indel_min_af have an impact on performance
+#         # // TODO Fix REF_PATH
+#         '''
+#         mkdir -p {params.gvcf_tmp_path}
+#         python $(which clair3.py) CallVariantsFromCffi \
+#             --chkpnt_fn {input.model}/pileup \
+#             --bam_fn {input.xam} \
+#             --call_fn {output.vcf} \
+#             --ref_fn {input.reference} \
+#             --ctgName {wildcards.contig} \
+#             --chunk_id {wildcards.chunk_id} \
+#             --chunk_num {wildcards.total_chunks} \
+#             --platform ont \
+#             --fast_mode False \
+#             --snp_min_af {params.snp_min_af} \
+#             --indel_min_af {params.indel_min_af} \
+#             --minMQ {params.min_mq} \
+#             --minCoverage {params.min_cov} \
+#             --call_snp_only False \
+#             --gvcf True \
+#             --temp_file_dir {params.gvcf_tmp_path} \
+#             --cmd_fn {input.command} \
+#             --pileup
+#         touch {output.vcf}
+#         '''
+
+
+# def aggregate_pileup_variants_input(wc):
+#     with checkpoints.make_chunks.get(sample="{sample}").output.chunks.open() as f:
+#         df = pd.read_csv(f"results/clair3/{sample}/tmp/CHUNK_LIST", names=("contig", "chunk_id", "total_chunks"), sep=" ")
+#         return expand("results/clair3/pileup/{sample}/{sample}.{contig}.{chunk_id}_of_{total_chunks}.vcf", zip, contig=df["contig"], chunk_id=df["chunk_id"], total_chunks=df["total_chunks"])
+
+# rule aggregate_pileup_variants:
+#     # Aggregates and sorts all variants (across all chunks of all contigs)
+#     # from pileup network. Determines quality filter for selecting variants
+#     # to use for phasing.
+#     threads: 2
+#     input:
+#         ref=REFERENCE,
+#         index="results/resources/genome.dna.homo_sapiens.GRCh38.105.fasta.mmi",
+#         # these need to be named as original, as program uses info from
+#         # contigs file to filter
+#         vcfs=aggregate_pileup_variants_input,
+#         contigs="results/clair3/{sample}/tmp/CONTIGS",
+#         command="results/clair3/{sample}/tmp/CMD",
+#     output:
+#         vcf_gz="results/clair3/{sample}/pileup.vcf.gz",
+#         vcf_gz_index="results/clair3/{sample}/pileup.vcf.gz.tbi",
+#         phase_qual="results/clair3/{sample}/phase_qual",
+#         # path "phase_qual", emit: phase_qual
+#     params:
+#         prefix="results/clair3/{sample}/pileup",
+#         input_dir="results/clair3/pileup/{sample}",
+#         vcf="results/clair3/{sample}/pileup.vcf",
+#         phase_qual_prefix="results/clair3/{sample}/",
+#     conda:
+#         "envs/clair3.yaml"
+#     shell:
+#         '''
+#         pypy $(which clair3.py) SortVcf \
+#             --input_dir {params.input_dir}/ \
+#             --output_fn {params.vcf} \
+#             --sampleName {wildcards.sample} \
+#             --ref_fn {input.ref} \
+#             --contigs_fn {input.contigs} \
+#             --cmd_fn {input.command}
+#         bcftools index -n {output.vcf_gz}
+#         bgzip -@ {threads} -fdc {output.vcf_gz} | pypy $(which clair3.py) SelectQual --phase --output_fn {params.phase_qual_prefix}
+#         '''
+
+# rule select_het_snps:
+#     # Filters a VCF by contig, selecting only het SNPs.
+#     cpus 2
+#     input:
+#         each contig
+#         vcf_gz="results/clair3/{sample}/pileup.vcf.gz",
+#         vcf_gz_index="results/clair3/{sample}/pileup.vcf.gz.tbi",
+#         # this is used implicitely by the program
+#         # https://github.com/HKU-BAL/Clair3/blob/329d09b39c12b6d8d9097aeb1fe9ec740b9334f6/preprocess/SelectHetSnp.py#L29
+#         path "split_folder/phase_qual"
+#     output:
+#         tuple val(contig), path("split_folder/${contig}.vcf.gz"), path("split_folder/${contig}.vcf.gz.tbi"), emit: het_snps_vcf
+#     shell:
+#         '''
+#         pypy $(which clair3.py) SelectHetSnp \
+#             --vcf_fn pileup.vcf.gz \
+#             --split_folder split_folder \
+#             --ctgName !{contig}
+
+#         bgzip -c split_folder/!{contig}.vcf > split_folder/!{contig}.vcf.gz
+#         tabix split_folder/!{contig}.vcf.gz
+#         '''
