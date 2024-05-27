@@ -1,0 +1,6 @@
+##INFO=<ID=SR_LOCATION,Number=1,Type=String,Description="Overlapping repeat location.">
+##INFO=<ID=SR_PERIOD,Number=1,Type=Integer,Description="Overlapping repeat period.">
+##INFO=<ID=SR_COPYNUMBER,Number=1,Type=Float,Description="Overlapping repeat copy number.">
+##INFO=<ID=SR_CONSENSUS_SIZE,Number=1,Type=Integer,Description="Overlapping repeat consensus size.">
+##INFO=<ID=SR_PER_MATCH,Number=1,Type=Integer,Description="Overlapping repeat per match.">
+##INFO=<ID=SR_SEQUENCE,Number=1,Type=String,Description="Overlapping repeat sequence.">

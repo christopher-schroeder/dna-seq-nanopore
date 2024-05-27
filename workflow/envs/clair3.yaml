@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+  - default
+dependencies:
+  - clair3 =1.0.5
+  - bcftools

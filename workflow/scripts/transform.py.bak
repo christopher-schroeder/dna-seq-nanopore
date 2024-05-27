@@ -1,0 +1,39 @@
+import pysam
+
+reference = pysam.FastaFile(snakemake.input.reference)
+
+with pysam.VariantFile(snakemake.input.calls, "r") as f:
+    f.header.add_meta('INFO', items=[('ID',"OSR"), ('Number',1), ('Type','String'), ('Description','Original Sequence Reference')])
+    f.header.add_meta('INFO', items=[('ID',"OSA"), ('Number',1), ('Type','String'), ('Description','Original Sequence Alternative')])
+    with pysam.VariantFile(snakemake.output.calls, "w", header=f.header) as o:
+        for record in f:
+            base = reference.fetch(record.chrom, record.pos - 2, record.pos - 2 + 1)
+            svtype = record.info["SVTYPE"]
+            alt = record.alts[0]
+            if svtype == "INS":
+                record.ref = base
+                if not record.alts[0] == "<INS>":
+                    record.alts = (base + alt,)
+                record.pos = record.pos - 1
+            elif svtype == "DEL":
+                record.ref = base + record.ref
+                record.alts = (base,)
+                record.pos = record.pos - 1
+            # elif svtype == "BND":
+            #     record.ref = base
+            #     record.alts = (alt.replace("N", base),)
+            #     record.pos = record.pos - 1
+            elif svtype == "INV":
+                pass
+            elif svtype == "DUP":
+                pass
+
+            if not svtype == "BND" and not "<" in record.alts[0]:
+                if "N" in record.ref:
+                    record.info["OSR"] = record.ref
+                    record.ref = record.ref.replace("N", "A")
+                if "N" in record.alts[0]:
+                    record.info["OSA"] = record.alts[0]
+                    record.alts = (record.alts[0].replace("N", "A"),)
+
+            o.write(record)

@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+  - pytorch
+dependencies:
+  - samtools =1.18
+  - pytorch =2

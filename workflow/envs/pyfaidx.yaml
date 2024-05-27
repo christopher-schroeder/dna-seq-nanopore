@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - bioconda
+  - pytorch
+dependencies:
+  - pyfaidx =0.8.1.1
