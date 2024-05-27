@@ -14,7 +14,8 @@ dist/
 .venv
 .venv/*
 .python-version
-
+.env
+.env/*
 
 .idea
 
