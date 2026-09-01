@@ -1,16 +1,27 @@
+rule faidx:
+    input:
+        reference=REFERENCE
+    output:
+        fai=f"{REFERENCE}.fai"
+    conda:
+        "../envs/samtools.yaml"
+    shell:
+        "samtools faidx {input.reference}"
+
+
 rule make_mmi:
     threads:
         64
     input:
-        reference=REFERENCE,
+        REFERENCE,
     output:
-        index="results/resources/genome.dna.homo_sapiens.GRCh38.105.fasta.mmi"
+        f"{REFERENCE}.mmi"
     log:
         "log/minimap_index.log"
     conda:
         "../envs/minimap2.yaml"
     shell:
-        "minimap2 -t {threads} -x map-ont -d {output.index} {input.reference}"
+        "minimap2 -t {threads} -x map-ont -d {output} {input}"
 
 
 rule download_clair3_model:

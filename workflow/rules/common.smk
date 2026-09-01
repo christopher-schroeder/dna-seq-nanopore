@@ -27,28 +27,12 @@ samples = (
 sample_names = units["sample_name"].unique()
 groups = samples["group"].unique()
 
-
 def get_group_samples(group):
     return samples.loc[samples["group"] == group]["sample_name"]
 
+
 def get_units_for_sample(sample):
     return units[units["sample_name"] == sample]["unit_name"]
-
-# def chunks(xs, n):
-#     n = max(1, n)
-#     return list(xs[i:i+n] for i in range(0, len(xs), n))
-
-# def get_chunk_filenames(sample, unit):
-#     path = units[(units.sample_name == sample) & (units.unit_name == unit)]["fast5"].iloc[0]
-#     fast5_files = glob.glob(f"{path}/*.fast5", recursive=True)
-#     return chunks(fast5_files, 10)
-
-# chunk_filenames = dict()
-
-# for _, row in units.iterrows():
-#     sample_name, unit_name = row["sample_name"], row["unit_name"]
-#     chunk_filenames[(sample_name, unit_name)] = get_chunk_filenames(sample_name, unit_name)
-
 
 # """Map a basecalling model to a Clair3 model.
 
@@ -110,6 +94,19 @@ def select_model(basecaller_cfg, lookup_table=os.path.join(workflow.basedir, "da
                     "Check your --basecaller_cfg has been provided correctly. "
                 ),
             )
+
+
+rule index_bcf:
+    threads:
+        4
+    input:
+        "{x}.bcf"
+    output:
+        "{x}.bcf.csi"
+    conda:
+        "../envs/bcftools.yaml"
+    shell:
+        "bcftools index {input} --threads {threads}"
 
 
 rule get_all_chromosomes_bed:

@@ -8,10 +8,10 @@ rule call_str:
         reference=REFERENCE,
     output:
         # vcf="results/str/{sample}.{chrom}.vcf.gz",
-        tsv="results/str/{sample}.tsv",
-        bed="results/str/{sample}.bed",
+        tsv="results/str_single/{sample}.tsv",
+        bed="results/str_single/{sample}.bed",
     params:
-        prefix="results/str/{sample}"
+        prefix="results/str_single/{sample}"
         # --sex !{params.sex}
     conda:
         "../envs/straglr.yaml"
@@ -28,6 +28,37 @@ rule call_str:
         #         --min_cluster_size 1
         #     cat !{chr}_tmp.vcf | vcfstreamsort | bgziptabix !{chr}_straglr.vcf.gz
         # '''
+
+
+rule merged_str_bed:
+    input:
+        expand("results/str_single/{sample}.bed", sample=units["sample_name"])
+    output:
+        "results/str_candidates/merged.bed"
+    conda:
+        "../envs/bedtools.yaml"
+    shell:
+        "cat {input} | cut -f 1-4 |  sort -u | bedtools sort > {output}"
+
+
+rule genotype_str:
+    threads:
+        64
+    input:
+        xam="results/phased/{sample}.cram",
+        xai="results/phased/{sample}.cram.crai",
+        reference=REFERENCE,
+        bed="results/str_candidates/merged.bed",
+    output:
+        tsv="results/str/{sample}.tsv",
+        bed="results/str/{sample}.bed",
+    params:
+        prefix="results/str/{sample}"
+    conda:
+        "../envs/straglr.yaml"
+    shell:
+        "straglr.py {input.xam} {input.reference} {params.prefix} --nproc {threads} --min_support 1 --min_cluster_size 1 --loci {input.bed}"
+
 
 rule str_to_vcf:
     input:

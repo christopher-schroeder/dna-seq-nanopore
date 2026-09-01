@@ -1,0 +1,9 @@
+Bootstrap: docker
+From: bioconductor/bioconductor_docker:RELEASE_3_20
+
+%post
+    R -e 'BiocManager::install("borealis", update=FALSE, ask=FALSE)'
+    R -e 'stopifnot(requireNamespace("borealis", quietly=TRUE))'
+
+%labels
+    purpose borealis-outlier-methylation

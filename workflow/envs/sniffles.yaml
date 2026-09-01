@@ -4,5 +4,6 @@ channels:
   - nodefaults
 dependencies:
   - edlib
-  - pip:
-      - "--editable=git+ssh://git@github.com/christopher-schroeder/Sniffles.git#egg=sniffles"
+  - sniffles =2.5.2
+  # - pip:
+  #     - "--editable=git+ssh://git@github.com/christopher-schroeder/Sniffles.git#egg=sniffles"

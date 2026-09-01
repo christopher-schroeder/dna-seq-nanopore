@@ -1,0 +1,8 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - qualimap =2.3
+  - python =3.11
+  - snakemake-wrapper-utils =0.6.2
+  - samtools =1.21

@@ -1,7 +1,8 @@
 channels:
   - conda-forge
   - bioconda
-  - default
+  - nodefaults
 dependencies:
-  - clair3 =1.0.5
+  - clair3 =1.0.10
   - bcftools
+  - whatshap =1.7

@@ -5,4 +5,5 @@ channels:
 dependencies:
   - samtools =1.18
   - tabix =1.11
-  - whatshap =2.1
+  - pip:
+    - git+https://github.com/whatshap/whatshap.git@96744845181b8d0fe63ccf232f1da64e0a277d7b

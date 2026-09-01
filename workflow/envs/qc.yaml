@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  # 1.6 predates the nanostat, mosdepth and peddy modules this pipeline relies on
+  - multiqc =1.35

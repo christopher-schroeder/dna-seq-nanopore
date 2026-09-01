@@ -1,0 +1,19 @@
+title: "dna-seq-nanopore"
+subtitle: "Oxford Nanopore whole-genome QC"
+intro_text: >
+  Read-level nanopore statistics (NanoPlot/NanoStat), alignment statistics
+  (samtools, qualimap), coverage (mosdepth) and pedigree/sex concordance (peddy).
+
+# NanoPlot writes "<sample>.NanoStats.txt"; strip the suffix so the sample is
+# named "<sample>" and shares a row with the samtools/qualimap/mosdepth results
+# instead of showing up as a separate "<sample>.NanoStats" sample.
+extra_fn_clean_exts:
+  - ".NanoStats"
+  - "_NanoStats"
+
+module_order:
+  - nanostat
+  - samtools
+  - qualimap
+  - mosdepth
+  - peddy

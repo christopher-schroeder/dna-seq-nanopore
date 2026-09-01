@@ -58,8 +58,8 @@ rule basecalling:
         "results/basecalls/{sample}.{unit}.ubam",
     params:
         #cuda_device="cuda:all",
-        #model="results/resources/dna_r10.4.1_e8.2_400bps_hac@v4.1.0",
-        model="results/resources/dna_r9.4.1_e8_hac@v3.3",
+        model=f"results/resources/dna_r10.4.1_e8.2_400bps_{config.get('basecalling_model', 'hac')}@v5.2.0",
+        #model="results/resources/dna_r9.4.1_e8_hac@v3.3",
         remora_args="",
         basecaller_args="--modified-bases 5mCG_5hmCG -c 1000",
         cuda_devices=lambda wc: os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -69,13 +69,15 @@ rule basecalling:
         "logs/basecalling/{sample}.{unit}.log"
     shell:
         """
-        (/projects/humgen/pipelines/dna-seq-nanopore/workflow/tools/dorado-0.5.3-linux-x64/bin/dorado basecaller \
+        (/projects/humgen/pipelines/dna-seq-nanopore/workflow/tools/dorado-2.0.0-linux-x64/bin/dorado basecaller \
             {params.model} \
             {input.fast5_dir} \
             {params.remora_args} \
             {params.basecaller_args} \
-            --device cuda:0,2,3,5 > {output}) > {log} 2>&1
+            --device cuda:1 > {output}) > {log} 2>&1
         """
+
+#--device cuda:0,1,3,5
 
 rule merge_unit_basecalls:
     threads:

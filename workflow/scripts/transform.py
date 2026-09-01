@@ -11,7 +11,7 @@ with pysam.VariantFile(snakemake.input.calls, "r") as f:
                 record.info["SEQ"] = record.alts[0]
                 record.alts = ("<INS>",)
             elif svtype == "DEL":
-                record.info["SEQ"] = record.ref
+                record.info["SEQ"] = record.alts[0]
                 record.alts = ("<DEL>",)
             # elif svtype == "BND":
             #     record.ref = base

@@ -20,6 +20,6 @@ rule align_and_qsFilter:
         """
         samtools bam2fq -@ {threads} -T 1 {input.reads} \
         | minimap2 -y -t {threads} -ax map-ont {input.mmi_reference} - \
-        | samtools sort -@ {threads} -m 2G \
+        | samtools sort -@ {threads} -m 1G \
         | samtools view -@ {threads} -e '[qs] >= {params.qscore_filter}' --output {output.passed} --unoutput {output.failed} -O cram,embed_ref --reference {input.reference} --write-index -
         """

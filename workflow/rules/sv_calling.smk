@@ -42,26 +42,27 @@ rule sniffles2_snf:
             --cluster-merge-pos {params.cluster_merge_pos} \
             --input {input.xam} \
             --long-ins-length 10000 \
-            --phase \
             --snf {output.snf} \
-            --reference {input.reference}
+            --reference {input.reference} \
+            --allow-overwrite
         """
 
 
-rule sniffles2:
+rule sv_sniffles2:
     threads:
-        4
+        64
     input:
         snfs=lambda wc: expand("results/sv_snf/{sample}.snf", sample=get_group_samples(wc.group)),
         reference=REFERENCE,
     output:
         vcf="results/sv/{group}.vcf",
     params:
-        tmp_vcf="results/sv/{group}.tmp.vcf",
         min_sv_length=30,
         cluster_merge_pos=0,
     conda:
         "../envs/sniffles.yaml"
+    resources:
+        mem_mb=5000
     shell:
         """
         sniffles \
@@ -71,15 +72,14 @@ rule sniffles2:
             --cluster-merge-pos {params.cluster_merge_pos} \
             --input {input.snfs} \
             --long-ins-length 10000 \
-            --phase \
-            --vcf {output.vcf} \
-            --reference {input.reference}
-        sed '/.:0:0:0:NULL/d' {output.vcf} > {params.tmp_vcf}
-        mv {params.tmp_vcf} {output.vcf}
+            --vcf /dev/stderr \
+            --reference {input.reference} \
+            --allow-overwrite \
+            --quiet 3>&1 1>&2 2>&3 3>&- | sed '/.:0:0:0:NULL/d' > {output.vcf}
         """
 
 
-rule filterCalls:
+rule sv_filter_calls:
     threads: 1
     input:
         vcf="results/sv/{group}.vcf",
@@ -107,20 +107,6 @@ rule filterCalls:
 
         sh {output.script} > {output.vcf}
         """
-
-rule sortVCF:
-    threads:
-        1
-    input:
-        vcf="results/sv/{group}.filtered.vcf",
-    output:
-        vcf="results/sv/{group}.sorted.vcf",
-    conda:
-        "../envs/filtercalls.yaml"
-    group:
-        lambda wc: wc.group
-    shell:
-        "bcftools sort {input.vcf} > {output.vcf}"
 
 
 # rule indexVCF:

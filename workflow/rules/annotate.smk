@@ -9,7 +9,7 @@ rule get_vep_cache:
         "logs/vep/cache.log",
     cache: "omit-software"  # save space and time with between workflow caching (see docs)
     wrapper:
-        "v3.3.5/bio/vep/cache"
+        "v4.3.0/bio/vep/cache"
 
 rule download_vep_plugins:
     output:
@@ -31,47 +31,94 @@ rule sort_str:
         "bedtools sort -i {input} > {output}"
 
 
-rule annotate_str_vep:
+rule normalize:
     threads:
-        4
+        8
     input:
-        calls="results/str/{sample}.vcf",
-        cache="results/resources/vep/cache",
-        plugins="results/resources/vep/plugins",
+        variants="results/{calls}/{group}.bcf",
+        reference=REFERENCE,
     output:
-        calls="results/str/{sample}.annotated.vep.bcf",
-        stats="results/str/{sample}.annotated.vep.stats.html",
-    params:
-        plugins=[],
-        extra="--everything"
+        "results/{calls}/{group}.norm.bcf",
     log:
-        "logs/annotate_str/{sample}.vep.log",
-    wrapper:
-        "v3.5.2/bio/vep/annotate"
+        "logs/normalize/{calls}/{group}.log"
+    benchmark:
+        "benchmarks/normalize/{calls}/{group}.txt"
+    conda:
+        "../envs/bcftools.yaml"
+    resources:
+        mem_mb=2048
+    group:
+        lambda wc: wc.group
+    shell:
+        "(bcftools norm -a -m -any -f {input.reference} --atom-overlaps . --threads {threads} -Ob -c w {input.variants} > {output}) 2> {log}"
 
 
-rule annotate_snps:
+rule annotate_snps_vep:
     threads:
-        4
+        16
     input:
-        calls="results/snps/{sample}.vcf.gz",
+        calls="results/snps/{group}.norm.bcf",
         cache="results/resources/vep/cache",
         plugins="results/resources/vep/plugins",
     output:
-        calls="results/snps/{sample}.annotated.vcf.gz",
-        stats="results/snps/{sample}.annotated.stats.html",
+        calls="results/snps/{group}.annotated.vep.vcf.gz",
+        stats="results/snps/{group}.annotated.vep.stats.html",
     params:
         plugins=[],
         extra="--symbol"
     log:
-        "logs/annotate_snps/{sample}.log",
+        "logs/annotate/{group}.vep.log",
     wrapper:
         "v3.3.6/bio/vep/annotate"
 
 
-rule transform_sv:
+
+rule annotate_snps_gnomad:
+    threads: 2
     input:
-        calls="results/sv/{group}.sorted.vcf",
+        calls="results/snps/{group}.annotated.vep.vcf.gz",
+        calls_index="results/snps/{group}.annotated.vep.vcf.gz.tbi",
+        database="resources/gnomad.genomes.v4.1.sites.vcf.gz",
+        database_index="resources/gnomad.genomes.v4.1.sites.vcf.gz.tbi",
+    output:
+        call="results/snps/{group}.annotated.gnomad.bcf",
+        call_index="results/snps/{group}.annotated.gnomad.bcf.csi",
+    params:
+        info="gnomad_AN:=INFO/AN,gnomad_AF:=INFO/AF,gnomad_AC:=INFO/AC,gnomad_nhomalt:=INFO/nhomalt,gnomad_AN_XX:=INFO/AN_XX,gnomad_AC_XX:=INFO/AC_XX,gnomad_AF_XX:=INFO/AF_XX,gnomad_nhomalt_XX:=INFO/nhomalt_XX"
+    conda:
+        "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/{group}.gnomad.log"
+    shell:
+        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output} --write-index"
+
+
+
+rule sv_sort_vcf:
+    threads:
+        1
+    input:
+        vcf="results/sv/{group}.control_annotated.vcf",
+    output:
+        vcf="results/sv/{group}.sorted.vcf",
+    conda:
+        "../envs/filtercalls.yaml"
+    group:
+        lambda wc: wc.group
+    shell:
+        "bcftools sort {input.vcf} > {output.vcf}"
+
+
+def sv_transform_input(wc):
+    if config.get("jasmine", True):
+        return f"results/sv/{wc.group}.jasmine_fix.vcf"
+    else:
+        return f"results/sv/{wc.group}.filtered.vcf"
+
+
+rule sv_transform:
+    input:
+        calls=sv_transform_input,
         reference=REFERENCE,
     output:
         calls="results/sv/{group}.transformed.bcf",
@@ -81,55 +128,133 @@ rule transform_sv:
         "../scripts/transform.py"
 
 
-rule annotate_sv_vep:
+def get_vep_gff():
+    if (vep:=config.get("vep", None)):
+        return {"gff": vep}
+    return {}
+
+
+rule sv_annotate_vep:
     threads:
         4
     input:
+        **get_vep_gff(),
         calls="results/sv/{group}.transformed.bcf",
         cache="results/resources/vep/cache",
         plugins="results/resources/vep/plugins",
+        fasta=REFERENCE,
     output:
         calls="results/sv/{group}.annotated.vep.bcf",
         stats="results/sv/{group}.annotated.vep.stats.html",
     params:
         plugins=[],
-        extra="--everything"
+        extra="--symbol"
     log:
-        "logs/annotate_sv/{group}.vep.log",
+        "logs/annotate/sv/{group}.vep.log",
     wrapper:
         "v3.5.2/bio/vep/annotate"
 
 
-rule annotate_sv_snpsift:
+rule sv_transform_back:
     input:
-        call="results/sv/{group}.annotated.vep.bcf",
-        database="/projects/humgen/science/resources/gnomad4.vcf.gz",
-        database_index="/projects/humgen/science/resources/gnomad4.vcf.gz.tbi",
+        calls="results/sv/{group}.annotated.vep.bcf",
     output:
-        call="results/sv/{group}.annotated.snpsift.bcf",
-    params:
-        extra="-name gnomad"
-    log:
-        "logs/annotate_gnomad_sv/{group}.snpsift.log",
-    resources:
-        mem_mb=30000
-    threads: 8
-    wrapper:
-        "v3.5.0/bio/snpsift/annotate"
+        calls="results/sv/{group}.annotated.vep.back.bcf",
+    conda:
+        "../envs/pysam.yaml"
+    script:
+        "../scripts/transform_back.py"
 
 
-rule annotate_sv_repeats:
+rule sv_annotate_gnomad:
+    threads: 2
     input:
-        call="results/sv/{group}.annotated.snpsift.bcf",
+        calls="results/sv/{group}.annotated.vep.back.bcf",
+        calls_index="results/sv/{group}.annotated.vep.back.bcf.csi",
+        database="resources/gnomad.v4.1.sv.sites.no_chr.vcf.gz",
+        database_index="resources/gnomad.v4.1.sv.sites.no_chr.vcf.gz.tbi",
+    output:
+        call="results/sv/{group}.annotated.gnomad.bcf",
+        call_index="results/sv/{group}.annotated.gnomad.bcf.csi",
+    params:
+        info="gnomad_AN:=INFO/AN,gnomad_AF:=INFO/AF,gnomad_AC:=INFO/AC,gnomad_nhomalt:=INFO/N_HOMALT,gnomad_AN_XX:=INFO/AN_XX,gnomad_AC_XX:=INFO/AC_XX,gnomad_AF_XX:=INFO/AF_XX,gnomad_nhomalt_XX:=INFO/N_HOMALT_XX"
+    conda:
+        "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/sv/{group}.gnomad.log"
+    shell:
+        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output} --write-index"
+
+
+rule sv_annotate_repeats:
+    threads:
+        8
+    input:
+        calls="results/sv/{group}.annotated.gnomad.bcf",
         repeats="/projects/humgen/pipelines/dna-seq-nanopore/workflow/data/simple_repeats.tsv",
         header="/projects/humgen/pipelines/dna-seq-nanopore/workflow/data/simple_repeats.hdr.txt"
     output:
-        call="results/sv/{group}.annotated.repeats.bcf",
-    log:
-        "logs/annotate_gnomad_sv/{group}.repeats.log",
-    params:
-        fields="CHROM,FROM,TO,SR_LOCATION,SR_PERIOD,SR_COPYNUMBER,SR_CONSENSUS_SIZE,SR_PER_MATCH,SR_SEQUENCE"
+        calls="results/sv/{group}.annotated.repeats.bcf",
+        calls_index="results/sv/{group}.annotated.repeats.bcf.csi",
     conda:
         "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/sv/{group}.repeats.log"
     shell:
-        "bcftools annotate -a {input.repeats} -c {params.fields} {input.call} -h {input.header} -o {output} -O b"
+        "bcftools annotate -a {input.repeats} {input.calls} -c CHROM,FROM,TO,SR_LOCATION,SR_PERIOD,SR_COPYNUMBER,SR_CONSENSUS_SIZE,SR_PER_MATCH,SR_SEQUENCE -h {input.header} -o {output.calls} --write-index --threads {threads}"
+
+
+rule merge_snps:
+    threads:
+        8
+    input:
+        bcf=expand("results/snps/{group}.bcf", group=groups),
+        csi=expand("results/snps/{group}.bcf.csi", group=groups)
+    output:
+        bcf="results/snps_merged/merged.bcf",
+        bcf_index="results/snps_merged/merged.bcf.csi",
+    params:
+        force_single=lambda w, input: "--force-single" if len(input.bcf) == 1 else ""
+    conda:
+        "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/merge_snps.log"
+    shell:
+        "(bcftools merge -0 -m none {params.force_single} -O u --threads {threads} {input.bcf} | bcftools norm -m -both -O b -o {output.bcf} --write-index --threads {threads}) 2> {log}"
+
+
+rule generate_inhouse:
+    threads:
+        8
+    input:
+        calls="results/snps_merged/merged.bcf",
+    output:
+        bcf="results/snps_merged/merged.inhouse.bcf",
+        bcf_index="results/snps_merged/merged.inhouse.bcf.csi",
+    conda:
+        "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/generate_inhouse.log"
+    shell:
+        "bcftools +fill-tags {input.calls} -- -t AC,AN,NS,AF,AC_Hom,AC_Het | bcftools view -G -O b -o {output.bcf} --write-index --threads {threads}"
+
+
+rule annotate_inhouse:
+    threads:
+        8
+    input:
+        calls="results/snps/{group}.annotated.gnomad.bcf",
+        calls_index="results/snps/{group}.annotated.gnomad.bcf.csi",
+        database="results/snps_merged/merged.inhouse.bcf",
+        database_index="results/snps_merged/merged.inhouse.bcf.csi",
+    output:
+        call="results/snps/{group}.annotated.inhouse.bcf",
+        call_index="results/snps/{group}.annotated.inhouse.bcf.csi",
+    params:
+        info="inhouse_AN:=INFO/AN,inhouse_AF:=INFO/AF,inhouse_AC:=INFO/AC,inhouse_nhomalt:=INFO/AC_Hom"
+    conda:
+        "../envs/bcftools.yaml"
+    log:
+        "logs/annotate/{group}.inhouse.log"
+    shell:
+        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output.call} --write-index"
