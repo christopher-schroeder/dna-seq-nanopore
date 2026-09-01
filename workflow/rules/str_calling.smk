@@ -32,7 +32,7 @@ rule call_str:
 
 rule merged_str_bed:
     input:
-        expand("results/str_single/{sample}.bed", sample=units["sample_name"])
+        expand("results/str_single/{sample}.bed", sample=sample_names)
     output:
         "results/str_candidates/merged.bed"
     conda:
@@ -57,7 +57,7 @@ rule genotype_str:
     conda:
         "../envs/straglr.yaml"
     shell:
-        "straglr.py {input.xam} {input.reference} {params.prefix} --nproc {threads} --min_support 1 --min_cluster_size 1 --loci {input.bed}"
+        "straglr.py {input.xam} {input.reference} {params.prefix} --nprocs {threads} --min_support 1 --min_cluster_size 1 --loci {input.bed}"
 
 
 rule str_to_vcf:

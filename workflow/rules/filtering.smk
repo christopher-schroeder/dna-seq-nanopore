@@ -3,8 +3,8 @@ rule snps_filter_by_maf:
         "results/{x}.bcf"
     output:
         "results/{x}.maf.{maf}.bcf"
-    # wildcard_constraints:
-    #     dataset="\d+"
+    wildcard_constraints:
+        maf=r"[0-9]*\.?[0-9]+",
     conda:
         "../envs/vembrane.yaml"
     benchmark:

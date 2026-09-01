@@ -8,11 +8,13 @@ threshold_lookup = ['0'] + ['2'] * 10 + ['3'] * 9 + ['5'] * 20 + ['8'] * 100
 
 
 def import_total_depth(path):
-    """Get the average read depth."""
+    """Get the average read depth from a mosdepth summary file."""
     with open(path, "r") as fh:
         for line in fh:
-            if "total" in line:
-                return float(line.strip().split("\t")[3])
+            fields = line.rstrip("\n").split("\t")
+            if fields and fields[0] == "total":
+                return float(fields[3])
+    raise ValueError(f"no 'total' row in mosdepth summary {path}")
 
 
 def parse_arguments():

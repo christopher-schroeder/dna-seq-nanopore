@@ -46,8 +46,14 @@ rule fix_jasmine:
         "../envs/bcftools.yaml"
     shell:
         """
-        bcftools view {input.variants} -h | tail -n 1 | cut -f 10- | tr "\\t" "\\n" | grep ^0 > {output.primary_samples}
-        cat {output.primary_samples} | cut -c3- > {output.real_names}
+        # jasmine prefixes every sample column with the index of its input file;
+        # index 0 is this group's own calls, everything else is a control
+        bcftools view {input.variants} -h | tail -n 1 | cut -f 10- | tr "\\t" "\\n" | grep '^0_' > {output.primary_samples}
+        if [ ! -s {output.primary_samples} ]; then
+            echo "ERROR: no 0_* sample column in {input.variants}" >&2
+            exit 1
+        fi
+        cut -c3- {output.primary_samples} > {output.real_names}
         bcftools view -S {output.primary_samples} {input.variants} |
             sed 's/Description=""/Description="blank">/g' |
             bcftools reheader --samples {output.real_names} |
@@ -98,7 +104,6 @@ rule jasmine:
     conda:
         "../envs/jasmine.yaml"
     params:
-        tmp=lambda wc: '{:X}.vcf'.format(hash(wc.group) % ((sys.maxsize + 1) * 2)),
         content="\n".join(
             ["results/sv/{group}.filtered.vcf"] +
             expand(controls_path_glob, control=controls)
@@ -106,6 +111,9 @@ rule jasmine:
     shell:
         """
         echo '{params.content}' > {output.file_list}
-        jasmine -Xmx50g file_list={output.file_list} out_file={params.tmp} threads={threads} --require_first_sample genome_file={input.reference} --output_genotypes --ignore_strand --dup_to_ins --normalize-chrs --centroid_merging --allow_intrasample --help > {log} 2>&1
-        mv {params.tmp} {output.variants}
+        # jasmine writes the merged VCF itself; keep it out of the final path
+        # until it is complete so an aborted run leaves no half-written output
+        tmp={output.variants}.tmp.vcf
+        jasmine -Xmx50g file_list={output.file_list} out_file=$tmp threads={threads} --require_first_sample genome_file={input.reference} --output_genotypes --ignore_strand --dup_to_ins --normalize-chrs --centroid_merging --allow_intrasample > {log} 2>&1
+        mv $tmp {output.variants}
         """ 

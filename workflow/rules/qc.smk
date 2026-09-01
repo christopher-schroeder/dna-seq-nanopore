@@ -118,13 +118,14 @@ rule qualimap:
     threads:
         33
     resources:
-        mem_gb=150 #lambda wc, input: int(max(10, input.size_mb / 1024))
+        mem_mb=90000
     shell:
         """
         samtools view -b {input.bam} | \
         qualimap bamqc \
         -bam /dev/stdin \
         -outdir {output.outdir} \
+        -nt {threads} \
         --java-mem-size=80G
         """
 
@@ -141,19 +142,32 @@ PED_SEX_CODES = {
 }
 
 
+# samples.tsv is written with the short column names; the PED spellings are
+# accepted as aliases so either sheet layout works.
+PED_COLUMN_ALIASES = {
+    "paternal_id": ("paternal_id", "father"),
+    "maternal_id": ("maternal_id", "mother"),
+    "sex": ("sex",),
+    "phenotype": ("phenotype",),
+}
+
+
 def get_ped_field(sample, column, default="0"):
     """Read an optional pedigree column out of config/samples.tsv."""
-    if column not in samples.columns:
-        return default
-    value = samples.at[sample, column]
-    if pd.isna(value) or not str(value).strip():
-        return default
-    return str(value).strip()
+    for candidate in PED_COLUMN_ALIASES.get(column, (column,)):
+        if candidate not in samples.columns:
+            continue
+        value = samples.at[sample, candidate]
+        if pd.isna(value) or not str(value).strip():
+            continue
+        return str(value).strip()
+    return default
 
 
 rule peddy_ped:
     # samples.tsv only has to carry sample_name and group; the optional columns
-    # paternal_id, maternal_id, sex and phenotype are used when present.
+    # father/paternal_id, mother/maternal_id, sex and phenotype are used when
+    # present.
     input:
         "config/samples.tsv",
     output:

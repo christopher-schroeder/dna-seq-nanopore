@@ -90,7 +90,7 @@ rule annotate_snps_gnomad:
     log:
         "logs/annotate/{group}.gnomad.log"
     shell:
-        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output} --write-index"
+        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output.call} --write-index"
 
 
 
@@ -183,7 +183,7 @@ rule sv_annotate_gnomad:
     log:
         "logs/annotate/sv/{group}.gnomad.log"
     shell:
-        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output} --write-index"
+        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output.call} --write-index"
 
 
 rule sv_annotate_repeats:

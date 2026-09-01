@@ -7,14 +7,12 @@ rule validate_modbam:
         ref=REFERENCE,
     output:
         check="results/checks/validate_modbam/{sample}.txt",
-    params:
-        basedir=BASEDIR
     conda:
-        "../envs/samtools.yaml"
+        "../envs/pysam.yaml"
     group:
         lambda wc: f"{wc.sample}"
     script:
-        "{params.basedir}/scripts/check_valid_modbam.py"
+        "../scripts/check_valid_modbam.py"
 
 rule modkit_phase:
     threads: 64
@@ -69,6 +67,7 @@ rule methbat_pileup:
     input:
         xam="results/phased/{sample}.cram",
         xai="results/phased/{sample}.cram.crai",
+        ref=REFERENCE,
     output:
         bed="results/methbat/pileup/{sample}.5mC.bed.gz",
         tbi="results/methbat/pileup/{sample}.5mC.bed.gz.tbi",
@@ -80,6 +79,7 @@ rule methbat_pileup:
         """
         methbat pileup \
             --input-bam {input.xam} \
+            --reference {input.ref} \
             --output-prefix {params.prefix} \
             --threads {threads}
         """
@@ -106,7 +106,7 @@ rule methbat_profile:
 
 rule methbat_collection:
     input:
-        profiles=expand("results/methbat/profiles/{sample}.profile.tsv", sample=units["sample_name"]),
+        profiles=expand("results/methbat/profiles/{sample}.profile.tsv", sample=sample_names),
     output:
         collection="results/methbat/collection.tsv",
     run:

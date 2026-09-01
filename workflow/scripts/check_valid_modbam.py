@@ -1,23 +1,31 @@
 #!/usr/bin/env python
-"""Check whether the input is a modbam."""
+"""Check whether the input carries base modification tags."""
 
-import pysam
 import os
 import sys
 
+import pysam
+
+MOD_TAGS = {"mm", "ml"}
+MAX_READS = 10000
+
 valid_reads = 0
-fields = ['mm', 'ml']
-for i, alignment in enumerate(pysam.AlignmentFile(snakemake.input.xam)):
-    print(alignment)
-    n_tags = len([
-        tag for (tag, val) in alignment.get_tags() if tag.lower() in fields])
-    if n_tags == 2:
-        valid_reads += 1
-        break
-    if i >= 9999:
-        break
+with pysam.AlignmentFile(
+    snakemake.input.xam, reference_filename=snakemake.input.ref
+) as xam:
+    for i, alignment in enumerate(xam):
+        tags = {tag.lower() for tag, _ in alignment.get_tags()}
+        if MOD_TAGS <= tags:
+            valid_reads += 1
+            break
+        if i >= MAX_READS - 1:
+            break
 
 if valid_reads == 0:
+    sys.stderr.write(
+        f"{snakemake.input.xam} carries no MM/ML tags in its first "
+        f"{MAX_READS} reads: it is not a modified-base alignment.\n"
+    )
     sys.exit(os.EX_DATAERR)
 
-open(snakemake.output.check, mode='w').close()
+open(snakemake.output.check, mode="w").close()

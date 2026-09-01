@@ -62,7 +62,7 @@ rule sv_sniffles2:
     conda:
         "../envs/sniffles.yaml"
     resources:
-        mem_mb=5000
+        mem_mb=32000
     shell:
         """
         sniffles \

@@ -1,7 +1,9 @@
-import pandas as pd
+import sys
 from collections import defaultdict
 
-filename = "/projects/humgen/science/depienne/project818/dna-seq-nanopore/test.bed"
+import pandas as pd
+
+filename = sys.argv[1]
 
 df = pd.read_csv(filename, delimiter="\t", na_values=["-"], low_memory=False)
 

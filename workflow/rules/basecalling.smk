@@ -1,8 +1,12 @@
 import queue
 
+def fast5_directories_input(wc):
+    return units[(units.sample_name == wc.sample) & (units.unit_name == wc.unit)].iloc[0]["fast5"]
+
+
 rule link_input:
     input:
-        dir=lambda wc: units[(units.sample_name == wc.sample) & (units.unit_name == wc.unit)]["fast5"]
+        dir=fast5_directories_input
     output:
         dir=directory("results/input/{sample}/{unit}")
     shell:
@@ -10,9 +14,6 @@ rule link_input:
         mkdir -p results/input
         ln -s -r {input} {output}
         """
-
-def fast5_directories_input(wc):
-    return units[(units.sample_name == wc.sample) & (units.unit_name == wc.unit)].iloc[0]["fast5"]
 
 # rule basecalling:
 #     threads:
@@ -62,7 +63,6 @@ rule basecalling:
         #model="results/resources/dna_r9.4.1_e8_hac@v3.3",
         remora_args="",
         basecaller_args="--modified-bases 5mCG_5hmCG -c 1000",
-        cuda_devices=lambda wc: os.environ.get("CUDA_VISIBLE_DEVICES")
     # conda:
     #     "../envs/dorado.yaml"
     log:
@@ -74,7 +74,7 @@ rule basecalling:
             {input.fast5_dir} \
             {params.remora_args} \
             {params.basecaller_args} \
-            --device cuda:1 > {output}) > {log} 2>&1
+            --device cuda:all > {output}) > {log} 2>&1
         """
 
 #--device cuda:0,1,3,5

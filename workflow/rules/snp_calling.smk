@@ -7,48 +7,59 @@ rule clair3_call_variants:
         ref=REFERENCE,
         ref_index=REFERENCE + ".fai",
         model="results/resources/r1041_e82_400bps_hac_v410.tar.gz",
+        model_dir="results/resources/r1041_e82_400bps_hac_v410",
     output:
         vcf="results/clair3_new/{sample}/phased_merge_output.vcf.gz",
-        # out_dir=directory("results/clair3_new/{sample}"),
     params:
         sample_name="{sample}",
-        # out_dir="results/clair3_new/{sample}",
         min_qual=2,
         include_all_ctgs="false",
         var_pct_full=0.7,
         ref_pct_full=0.1,
         snp_min_af=0.08,
         indel_min_af=0.15,
-        model_path="results/resources/r1041_e82_400bps_hac_v410",
-        # floor for human WGS; guards against a wholesale empty result
-        min_variants=1000000,
-        out_dir="/local/work/cschroeder/snakemake-scratch/fs/results/clair3_new/{sample}",
-        xam="/local/work/cschroeder/snakemake-scratch/fs/alignment/{sample}.cram",
-        xam_index="/local/work/cschroeder/snakemake-scratch/fs/alignment/{sample}.cram.crai",
-        ref="/local/work/cschroeder/snakemake-scratch/fs/reference/ref.fasta",
-        ref_index="/local/work/cschroeder/snakemake-scratch/fs/reference/ref.fasta.fai",
-        vcf="/local/work/cschroeder/snakemake-scratch/fs/results/clair3_new/{sample}/phased_merge_output.vcf.gz",
+        # floor for human WGS; guards against a wholesale empty result. Set
+        # clair3_min_variants: 0 in the config to switch the check off for
+        # targeted or low-coverage runs.
+        min_variants=config.get("clair3_min_variants", 1000000),
+        # node-local scratch: clair3 is heavy on small random IO. This has to be
+        # per sample -- a shared path is copied over by whichever job starts next
+        # while the others are still reading it.
+        scratch="/local/work/cschroeder/snakemake-scratch/{sample}",
     resources:
         mem_mb=160000
     conda:
         "../envs/clair3.yaml"
+    log:
+        "logs/clair3/{sample}.log"
     shell:
         """
-        mkdir -p {params.out_dir}
-        mkdir -p /local/work/cschroeder/snakemake-scratch/fs/alignment/
-        mkdir -p /local/work/cschroeder/snakemake-scratch/fs/reference/
-        cp {input.xam} {params.xam}
-        cp {input.xam_index} {params.xam_index}
-        cp {input.ref} {params.ref}
-        cp {input.ref_index} {params.ref_index}
+        # run_clair3.sh is very chatty and the sanity checks below report on
+        # stderr; keep all of it together in the log
+        exec > {log} 2>&1
+
+        scratch={params.scratch}
+        rm -rf "$scratch"
+        # the copied CRAM is the size of the input; drop it however we exit
+        trap 'rm -rf "$scratch/alignment" "$scratch/reference"' EXIT
+        mkdir -p "$scratch/alignment" "$scratch/reference"
+
+        xam="$scratch/alignment/{wildcards.sample}.cram"
+        ref="$scratch/reference/ref.fasta"
+        out_dir="$scratch/clair3"
+
+        cp {input.xam} "$xam"
+        cp {input.xam_index} "$xam.crai"
+        cp {input.ref} "$ref"
+        cp {input.ref_index} "$ref.fai"
 
         run_clair3.sh \
-            --bam_fn={params.xam} \
-            --ref_fn={params.ref} \
+            --bam_fn="$xam" \
+            --ref_fn="$ref" \
             --threads={threads} \
             --platform="ont" \
-            --model_path={params.model_path} \
-            --output={params.out_dir} \
+            --model_path={input.model_dir} \
+            --output="$out_dir" \
             --sample_name={params.sample_name} \
             --qual={params.min_qual} \
             --indel_min_af={params.indel_min_af} \
@@ -59,14 +70,16 @@ rule clair3_call_variants:
             --enable_phasing \
             --longphase_for_phasing
 
+        vcf="$out_dir/phased_merge_output.vcf.gz"
+
         # Clair3 does not fail hard when a sub-stage dies (e.g. GNU parallel
         # aborting because $TMPDIR does not exist inside the container): it warns
         # and emits an empty or partially filled VCF. Check the result before it
         # enters the workflow. The VCF is coordinate sorted, so uniq -c is enough.
-        counts={params.out_dir}/contig_variant_counts.txt
-        bcftools query -f '%CHROM\n' {params.vcf} | uniq -c > $counts
+        counts="$out_dir/contig_variant_counts.txt"
+        bcftools query -f '%CHROM\n' "$vcf" | uniq -c > "$counts"
 
-        n_variants=$(awk '{{n += $1}} END {{print n + 0}}' $counts)
+        n_variants=$(awk '{{n += $1}} END {{print n + 0}}' "$counts")
         if [ "$n_variants" -lt {params.min_variants} ]; then
             echo "ERROR: {params.sample_name}: Clair3 called only $n_variants variants" \
                  "(expected at least {params.min_variants}); the run is empty or truncated." >&2
@@ -77,16 +90,17 @@ rule clair3_call_variants:
         # exempt because it is legitimately empty in female samples
         missing=$(awk 'FILENAME == ARGV[1] {{ called[$2]; next }}
                        $1 != "Y" && $1 != "chrY" && !($1 in called) {{ print $1 }}' \
-                  $counts {params.out_dir}/tmp/CONTIGS)
+                  "$counts" "$out_dir/tmp/CONTIGS")
         if [ -n "$missing" ]; then
             echo "ERROR: {params.sample_name}: Clair3 called no variants on contig(s):" \
                  "$(echo $missing); the run is truncated." >&2
             exit 1
         fi
 
-        cp {params.vcf} {output.vcf}
-        rm -rf {params.out_dir}
+        cp "$vcf" {output.vcf}
+        rm -rf "$out_dir"
         """
+
 
 rule copy_snps:
     input:

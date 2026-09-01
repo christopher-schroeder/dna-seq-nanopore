@@ -14,7 +14,7 @@ rule snps_table:
     group:
         "group"
     shell:
-        """vembrane table --overwrite-number-format GT=2 --annotation-key CSQ "{params.expression}" {input} > {output}"""
+        """vembrane table --overwrite-number-format GT=2 --overwrite-number-format AD=2 --annotation-key CSQ "{params.expression}" {input} > {output}"""
 
 
 rule snps_table_maf:
@@ -42,7 +42,7 @@ rule sv_table:
     output:
         "results/tables/{group}.sv.tsv"
     params:
-        expression=lambda wc: f"CHROM, POS, INFO['SVTYPE'], INFO['SVLEN'], QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO.get('gnomad_AF', ''), INFO.get('gnomad_AC', ''), INFO.get('gnomad_nhomalt', ''), INFO.get('CTRL_GT_HOM_WT', ''), INFO.get('CTRL_GT_HET', ''), INFO.get('CTRL_GT_HOM', ''), INFO.get('SR_LOCATION', ''), INFO.get('SR_PERIOD'), INFO.get('SR_COPYNUMBER'), INFO.get('SR_CONSENSUS_SIZE'), INFO.get('SR_PER_MATCH'), INFO.get('SR_SEQUENCE'), " + ", ".join(f"FORMAT['GT']['{sample}'], FORMAT['DV']['{sample}'], FORMAT['DR']['{sample}'] + FORMAT['DV']['{sample}']" for sample in get_group_samples(wc.group))
+        expression=lambda wc: f"CHROM, POS, INFO['SVTYPE'], INFO['SVLEN'], QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO.get('gnomad_AF', ''), INFO.get('gnomad_AC', ''), INFO.get('gnomad_nhomalt', ''), INFO.get('CTRL_AF', ''), INFO.get('CTRL_GT_HOM_WT', ''), INFO.get('CTRL_GT_HET', ''), INFO.get('CTRL_GT_HOM', ''), INFO.get('CTRL_GT_MISSING', ''), INFO.get('SR_LOCATION', ''), INFO.get('SR_PERIOD'), INFO.get('SR_COPYNUMBER'), INFO.get('SR_CONSENSUS_SIZE'), INFO.get('SR_PER_MATCH'), INFO.get('SR_SEQUENCE'), " + ", ".join(f"FORMAT['GT']['{sample}'], FORMAT['DV']['{sample}'], FORMAT['DR']['{sample}'] + FORMAT['DV']['{sample}']" for sample in get_group_samples(wc.group))
     conda:
         "../envs/vembrane.yaml"
     resources:

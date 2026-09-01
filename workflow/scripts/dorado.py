@@ -1,43 +1,60 @@
-from contextlib import contextmanager
-from itertools import cycle
-import GPUtil
+"""Run dorado on a GPU claimed with a lock file.
+
+Only needed for local (non-SLURM) basecalling; under SLURM the scheduler hands
+out the device and rules/basecalling.smk calls dorado directly.
+"""
+
 import os
-from pathlib import Path
-import time
 import random
+import subprocess
+import sys
+import time
+from pathlib import Path
 
-allocated_gid = None
-# avail_gpus = GPUtil.getAvailable(order='memory', maxLoad=.1, maxMemory=.1, includeNan=False, limit=6)
-avail_gpus = GPUtil.getAvailable(order='memory', includeNan=False, limit=6)
+import GPUtil
+
+LOCK_DIR = Path("/local/tmp")
+DORADO = "/projects/humgen/pipelines/dna-seq-nanopore/workflow/tools/dorado-2.0.0-linux-x64/bin/dorado"
 
 
-amount = random.randint(2,10)
-print(f"waiting for {amount} seconds")
-time.sleep(amount)
+def claim_gpu(poll_seconds=30):
+    """Claim a free GPU by creating its lock file, waiting until one frees up."""
+    while True:
+        available = GPUtil.getAvailable(order="memory", includeNan=False, limit=6)
+        for gid in available:
+            lock = LOCK_DIR / f"LCK_gpu_{gid}.lock"
+            try:
+                # O_EXCL makes the check and the claim a single atomic step, so
+                # two jobs starting together cannot both take the same GPU
+                fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                continue
+            os.close(fd)
+            return gid, lock
+        print("no free GPU, retrying", file=sys.stderr)
+        time.sleep(poll_seconds)
 
 
-while not allocated_gid:
-    for gid in cycle(avail_gpus):
-        # then we've successfully created the lockfile
-        if os.path.isfile(f"/local/tmp/LCK_gpu_{gid}.lock"):
-            continue
-        Path(f"/local/tmp/LCK_gpu_{gid}.lock").touch()
-        allocated_gid = gid
-        print("allocated_gid", allocated_gid)
-        break
+# stagger concurrent jobs so they do not all inspect the GPUs at once
+time.sleep(random.randint(2, 10))
+
+gpu_id, lock = claim_gpu()
+print("allocated gpu", gpu_id, file=sys.stderr)
 
 try:
-    command = """
-        /projects/humgen/pipelines/dna-seq-nanopore/workflow/tools/dorado-0.3.4-linux-x64/bin/dorado basecaller \
-        {params.model} \
-        {input.fast5_dir} \
-        {params.remora_args} \
-        {params.basecaller_args} \
-        --recursive \
-        --device cuda:{gpu_id} \
-        > {output.ubam}
-    """.format(params=snakemake.params, input=snakemake.input, output=snakemake.output, gpu_id=allocated_gid)
-    print(command)
-    os.system(command)
+    command = " ".join([
+        DORADO, "basecaller",
+        str(snakemake.params.model),
+        str(snakemake.input.fast5_dir),
+        str(snakemake.params.remora_args),
+        str(snakemake.params.basecaller_args),
+        "--recursive",
+        f"--device cuda:{gpu_id}",
+    ])
+    print(command, file=sys.stderr)
+    with open(snakemake.output.ubam, "wb") as out:
+        # check=True: a silent failure here would otherwise leave an empty ubam
+        # that the workflow accepts as a finished basecall
+        subprocess.run(command, shell=True, stdout=out, check=True)
 finally:
-    os.system(f"rm /local/tmp/LCK_gpu_{allocated_gid}.lock")
+    lock.unlink(missing_ok=True)

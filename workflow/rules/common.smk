@@ -44,7 +44,7 @@ def get_units_for_sample(sample):
 # Delegating this to a Python script seems overkill but allows us to
 # expand to more complex logic trivially in future.
 # Plus I don't want to write this in Groovy right now.
-def exit_obvious_error(header, error_msg, advice, basecaller, width=80):
+def exit_obvious_error(header, error_msg, advice, basecaller_cfg, width=80):
     """Write an obvious looking error to stderr and quit."""
     line = ("-" * width) + '\n'
     msg = (
@@ -62,6 +62,7 @@ def exit_obvious_error(header, error_msg, advice, basecaller, width=80):
 
 
 def select_model(basecaller_cfg, lookup_table=os.path.join(workflow.basedir, "data/clair3_models.tsv")):
+    """Return the Clair3 model name matching a dorado basecalling model."""
     with open(lookup_table) as tsv:
         for row in csv.DictReader(tsv, delimiter='\t'):
             if row["basecall_model_name"] == basecaller_cfg:
@@ -76,13 +77,10 @@ def select_model(basecaller_cfg, lookup_table=os.path.join(workflow.basedir, "da
                             "It is not possible to run the SNP subworkflow "
                             "with this data.\n"
                         ),
-                        basecaller_cfg=basecaller_cfg
+                        basecaller_cfg=basecaller_cfg,
                     )
-                    break  # exit before here but this keeps my intention obvious
-                else:
-                    # Good model found
-                    sys.stdout.write(model)
-                    break
+                # Good model found
+                return model
         else:
             # No model found (loop not broken)
             exit_obvious_error(
@@ -91,8 +89,9 @@ def select_model(basecaller_cfg, lookup_table=os.path.join(workflow.basedir, "da
                     "because the basecaller configuration has not been recognised."
                 ),
                 advice=(
-                    "Check your --basecaller_cfg has been provided correctly. "
+                    "Check your basecalling model has been provided correctly. "
                 ),
+                basecaller_cfg=basecaller_cfg,
             )
 
 

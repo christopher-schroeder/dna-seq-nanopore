@@ -2,13 +2,13 @@ containerized: "/projects/humgen/pipelines/dna-seq-nanopore/container.sif"
 
 import pandas as pd
 import os
-import yaml
 
-with open("config/config.yaml", "r") as file:
-    config = yaml.safe_load(file)
+# use the directive rather than loading the file by hand: rebinding `config`
+# throws away --configfile and --config overrides
+configfile: "config/config.yaml"
 
 BASEDIR = os.path.dirname(workflow.snakefile)
-REFERENCE = f"results/resources/{config["reference"]}.fasta"
+REFERENCE = "results/resources/{}.fasta".format(config["reference"])
 
 include: "rules/common.smk"
 include: "rules/basecalling.smk"
@@ -37,21 +37,21 @@ wildcard_constraints:
 
 rule all:
     input:
-        # expand("results/str/{sample}.bed", sample=units["sample_name"]),
-        # expand("results/snps/{sample}.annotated.vcf.gz", sample=units["sample_name"]),
-        # expand("results/sv_snf/{sample}.snf", sample=units["sample_name"]),
+        # expand("results/str/{sample}.bed", sample=sample_names),
+        # expand("results/snps/{sample}.annotated.vcf.gz", sample=sample_names),
+        # expand("results/sv_snf/{sample}.snf", sample=sample_names),
         # expand("results/sv/{group}.vcf", group=groups),
-        #expand("results/alignment/{sample}.cram", sample=units["sample_name"]),
+        #expand("results/alignment/{sample}.cram", sample=sample_names),
         # expand("results/tables/{group}.sv.tsv", group=groups),
         # expand("results/sv/{group}.annotated.repeats.bcf", group=groups),
         # expand("results/sv/{group}.annotated.repeats.bcf", group=groups)
         expand("results/tables/{group}.snps.maf.0.01.tsv", group=groups),
         # expand("results/tables/{group}.snps.tsv", group=groups),
-        # expand("results/tables/{sample}.str.tsv", sample=units["sample_name"]),
-        # expand("results/str/{sample}.annotated.vep.bcf", sample=units["sample_name"]),
-        #expand("results/snps/{sample}.vcf.gz", sample=units["sample_name"]),
-        #expand("results/methylation/{sample}_1.bed", sample=units["sample_name"]),
-        #expand("results/methylation/bismark/{sample}.bismark.cov.gz", sample=units["sample_name"]),
+        # expand("results/tables/{sample}.str.tsv", sample=sample_names),
+        # expand("results/str/{sample}.annotated.vep.bcf", sample=sample_names),
+        #expand("results/snps/{sample}.vcf.gz", sample=sample_names),
+        #expand("results/methylation/{sample}_1.bed", sample=sample_names),
+        #expand("results/methylation/bismark/{sample}.bismark.cov.gz", sample=sample_names),
 
 
 # print(len(list(controls["base_name"])))
@@ -86,17 +86,23 @@ rule only_jasmine:
     input:
         expand("results/sv/{group}.control_annotated.vcf", group=groups)
 
-rule only_download_controls:
+rule only_controls:
     input:
-        expand("results/controls/{vcf}.vcf.gz", vcf=controls)
+        expand(controls_path_glob, control=controls)
 
 rule only_mapping:
     input:
-        expand("results/alignment/{sample}.cram", sample=units["sample_name"]),
+        expand("results/alignment/{sample}.cram", sample=sample_names),
 
 rule only_mapping_avail:
     input:
-        lambda _: expand("results/alignment/{sample}.cram", sample=glob_wildcards("results/basecalls_sample/{sample}.ubam").sample),
+        lambda _: expand(
+            "results/alignment/{sample}.cram",
+            sample=sorted(
+                set(glob_wildcards("results/basecalls_sample/{sample}.ubam").sample)
+                & set(sample_names)
+            ),
+        ),
 
 rule only_basecalling_units:
     input:
@@ -104,15 +110,15 @@ rule only_basecalling_units:
 
 rule only_basecalling:
     input:
-        expand("results/basecalls_sample/{sample}.ubam", sample=units["sample_name"])
+        expand("results/basecalls_sample/{sample}.ubam", sample=sample_names)
 
 rule only_clair:
     input:
-        expand("results/clair3_new/{sample}/phased_merge_output.vcf.gz", sample=units["sample_name"])
+        expand("results/clair3_new/{sample}/phased_merge_output.vcf.gz", sample=sample_names)
         
 rule only_snp_calling:
     input:
-        expand("results/snps/samples/{group}.bcf", group=groups)
+        expand("results/snps/{group}.bcf", group=groups)
 
 rule only_snp_gnomad:
     input:
