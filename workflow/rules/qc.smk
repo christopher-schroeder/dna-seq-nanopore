@@ -258,7 +258,7 @@ rule peddy:
 ## ---------------------------------------------------------------------------
 
 def multiqc_input(wildcards):
-    paths = [
+    return [
         *expand("results/qc/nanoplot/{sample}/{sample}.NanoStats.txt", sample=sample_names),
         *expand("results/qc/samtools_stats/{sample}.txt", sample=sample_names),
         *expand("results/qc/samtools_flagstat/{sample}.flagstat", sample=sample_names),
@@ -266,14 +266,12 @@ def multiqc_input(wildcards):
         *expand("results/qc/qualimap/{sample}", sample=sample_names),
         *expand("results/mosdepth/{sample}.mosdepth.global.dist.txt", sample=sample_names),
         *expand("results/mosdepth/{sample}.mosdepth.summary.txt", sample=sample_names),
+        *expand("results/qc/peddy/{group}.peddy.ped", group=groups),
+        *expand("results/qc/peddy/{group}.sex_check.csv", group=groups),
+        *expand("results/qc/peddy/{group}.het_check.csv", group=groups),
+        *expand("results/qc/peddy/{group}.ped_check.csv", group=groups),
+        *expand("results/qc/peddy/{group}.background_pca.json", group=groups),
     ]
-    if config.get("peddy", True):
-        paths += expand("results/qc/peddy/{group}.peddy.ped", group=groups)
-        paths += expand("results/qc/peddy/{group}.sex_check.csv", group=groups)
-        paths += expand("results/qc/peddy/{group}.het_check.csv", group=groups)
-        paths += expand("results/qc/peddy/{group}.ped_check.csv", group=groups)
-        paths += expand("results/qc/peddy/{group}.background_pca.json", group=groups)
-    return paths
 
 
 rule multiqc:

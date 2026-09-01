@@ -46,6 +46,9 @@ rule all:
         # expand("results/sv/{group}.annotated.repeats.bcf", group=groups),
         # expand("results/sv/{group}.annotated.repeats.bcf", group=groups)
         expand("results/tables/{group}.snps.maf.0.01.tsv", group=groups),
+        # the MultiQC report pulls in nanoplot, samtools stats/flagstat/idxstats,
+        # qualimap, mosdepth and peddy
+        "results/qc/multiqc.html",
         # expand("results/tables/{group}.snps.tsv", group=groups),
         # expand("results/tables/{sample}.str.tsv", sample=sample_names),
         # expand("results/str/{sample}.annotated.vep.bcf", sample=sample_names),
