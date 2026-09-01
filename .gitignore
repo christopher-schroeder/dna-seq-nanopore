@@ -16,7 +16,6 @@ dist/
 .python-version
 env
 env/*
-workflow/tools/dorado-0.5.3-linux-x64
 
 .idea
 
@@ -30,3 +29,22 @@ workflow/tools/dorado-0.5.3-linux-x64
 tests/test*/*
 playground/*
 tutorial/*
+
+# Vendored tool binaries and containers: ~24 GB, installed on the cluster
+# rather than versioned. Keep the .def next to them so the image is rebuildable.
+*.sif
+workflow/tools/dorado-*
+workflow/tools/dna_r10.4.1_*
+workflow/tools/*.tar.gz
+workflow/tools/*.zip
+
+# root-owned, not readable by the pipeline user
+/resources/
+
+# editor and transfer leftovers
+*.bak
+*.bak[0-9]
+*:Zone.Identifier
+.~lock.*#
+deleteme/
+.claude/settings.local.json
