@@ -26,6 +26,7 @@ include: "rules/qc.smk"
 include: "rules/cadd.smk"
 
 ruleorder: annotate_snps_gnomad > index_bcf
+ruleorder: annotate_inhouse > index_bcf
 ruleorder: peddy_vcf > tabix
 
 wildcard_constraints:

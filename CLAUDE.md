@@ -26,9 +26,10 @@ snakemake only_mapping --use-conda --slurm --jobs 50
 None of these are created by a rule; the run fails without them.
 
 - `config/config.yaml`, `config/units.tsv`, `config/samples.tsv` — **not in git and absent from this checkout**. Read by `Snakefile` / `common.smk` at parse time, so *every* Snakemake invocation fails without them.
-  - `config.yaml` keys actually read by the code: `reference` (required, used to build `REFERENCE`), `basecalling_model` (`hac`/`sup`/`fast`, default `hac`), `jasmine` (bool, default `True`), `peddy` (bool, default `True` — whether the MultiQC report includes peddy), `vep` (optional GFF path for SV VEP), `methbat_regions` (required only if `methyl.smk` is re-enabled).
+  - `config.yaml` keys actually read by the code: `reference` (required, used to build `REFERENCE`), `basecalling_model` (`hac`/`sup`/`fast`, default `hac`), `jasmine` (bool, default `True`), `peddy` (bool, default `True` — whether the MultiQC report includes peddy), `vep` (optional GFF path for SV VEP), `inhouse_db` (optional, see below), `methbat_regions` (required only if `methyl.smk` is re-enabled).
   - `units.tsv`: `sample_name`, `unit_name`, `fast5`. `samples.tsv`: `sample_name`, `group`, plus the *optional* pedigree columns `paternal_id`, `maternal_id`, `sex`, `phenotype` used to build peddy's PED (see QC below).
 - `results/resources/<reference>.fasta` — the reference FASTA must be placed there by hand. `reference.smk` only builds `.fai` and `.mmi` from it.
+- `/projects/humgen/core/database_inhouse_nanopore/results/inhouse_db/inhouse.bcf` (+ `.csi`) — the in-house allele-count database, built by the separate `dna-seq-inhouse-db` pipeline and read by `annotate_inhouse`. Override with `config["inhouse_db"]`.
 - `/projects/humgen/tools/CADD-scripts-1.7.3` — the CADD v1.7 installation with its prebuilt conda/apptainer envs and GRCh38 annotation data, driven by `cadd.smk`. Override with `config["cadd_script"]`.
 - `resources/gnomad.genomes.v4.1.sites.vcf.gz` and `resources/gnomad.v4.1.sv.sites.no_chr.vcf.gz` (+ `.tbi`) — root-level `resources/`, hardcoded in `annotate.smk`. Note the SV database is the **no-chr-prefix** variant.
 - `/projects/humgen/science/depienne/ont1000g/results/hg38/raw/vcf_modified_unpacked/*.vcf` — 1000G control SVs. `jasmine.smk` runs `glob_wildcards` over this path **at parse time**; if the directory is unreachable the control list silently becomes empty rather than erroring.
@@ -59,7 +60,7 @@ FAST5/POD5 (units.tsv)
   → minimap2 → results/alignment/{sample}.cram
   → Clair3 (per sample, phased output) → results/snps_sample/{sample}.vcf.gz
       → whatshap haplotag → results/phased/{sample}.cram
-      → bcftools merge per group → normalize → VEP → gnomAD → CADD → inhouse → vembrane filter → table
+      → bcftools merge per group → normalize → VEP → gnomAD → CADD → in-house DB → vembrane filter → table
   → Sniffles2 .snf per sample → joint call per group → filter by depth-derived read support
       → Jasmine merge with 1000G controls → control freqs → sample fixup
       → transform → VEP → transform back → gnomAD → simple repeats → table
@@ -80,7 +81,7 @@ FAST5/POD5 (units.tsv)
 | `sv_calling.smk` | `filter_bam`, Sniffles2 SNF + joint call, read-support filter |
 | `str_calling.smk` | straglr discovery + genotyping |
 | `jasmine.smk` | Jasmine merge with controls, `annotate_control`, `fix_jasmine` |
-| `annotate.smk` | VEP cache/plugins, normalize, VEP + gnomAD for SNPs and SVs, repeats, inhouse DB |
+| `annotate.smk` | VEP cache/plugins, normalize, VEP + gnomAD for SNPs and SVs, repeats, `INHOUSE_*` annotation from the external in-house DB |
 | `filtering.smk` | `vembrane filter` on `gnomad_AF <= {maf}` and `QUAL > 10` |
 | `visualization.smk` | vembrane TSV tables (SNP, SNP-MAF, SV, STR) |
 | `qc.smk` | NanoPlot, samtools stats/flagstat/idxstats, qualimap, peddy, multiqc |
@@ -105,6 +106,7 @@ FAST5/POD5 (units.tsv)
 - **`ruleorder: annotate_snps_gnomad > index_bcf`** resolves the ambiguity on `*.bcf.csi`, and **`ruleorder: peddy_vcf > tabix`** the one on `*.vcf.gz.tbi`. Any new rule writing its own `.csi`/`.tbi` alongside its main output needs the same treatment — the generic `index_bcf`/`tabix` rules match every path.
 - **CADD runs a nested Snakemake/apptainer stack.** `cadd.smk` shells out to `CADD.sh`, which starts its own Snakemake run inside the apptainer images under `CADD-scripts-1.7.3/envs/apptainer`. Site apptainer config binds almost nothing, so the rule passes `--bind <CADD install dir>` explicitly; without it the inner jobs die on `$CADD/src/scripts/VCF2vepVCF.py: No such file or directory`. The `noanno` prescored folder is empty, so every variant is annotated and scored from scratch — this is the slowest rule in the SNP chain (hence 64 threads / 160 GB).
 - **CADD only covers `1-22,X,Y`.** `filter_primary_contigs` drops everything else before scoring, but `annotate_cadd` writes back onto the *full* gnomAD BCF, so MT and scaffold calls survive the chain with an empty `CADD_PHRED`.
+- **The in-house DB is external, not built from the run.** `annotate_inhouse` copies `INHOUSE_N`, `INHOUSE_CARRIERS`, `INHOUSE_HET`, `INHOUSE_HOM`, `INHOUSE_LOWQUAL` and their `_FRAC` fractions from `inhouse.bcf`, matching on CHROM/POS/REF/ALT with `--pair-logic exact`. The tags are listed explicitly because `bcftools annotate -c` does not accept wildcards. Variants absent from the DB get no `INHOUSE_*` tags, meaning zero carriers, and show up as empty table cells. The DB is biallelic and left-aligned against the same GRCh38.105 reference, so matching relies on `normalize` using that reference too. Samples already in the DB count themselves as carriers.
 - Absolute `/projects/humgen/pipelines/dna-seq-nanopore/...` paths appear in `str_calling.smk` (`strling_to_vcf.py`), `annotate.smk` (`simple_repeats.tsv`/`.hdr.txt`) and `basecalling.smk` — the repo is not relocatable as-is.
 
 ## QC subworkflow

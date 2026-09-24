@@ -204,39 +204,15 @@ rule sv_annotate_repeats:
         "bcftools annotate -a {input.repeats} {input.calls} -c CHROM,FROM,TO,SR_LOCATION,SR_PERIOD,SR_COPYNUMBER,SR_CONSENSUS_SIZE,SR_PER_MATCH,SR_SEQUENCE -h {input.header} -o {output.calls} --write-index --threads {threads}"
 
 
-rule merge_snps:
-    threads:
-        8
-    input:
-        bcf=expand("results/snps/{group}.bcf", group=groups),
-        csi=expand("results/snps/{group}.bcf.csi", group=groups)
-    output:
-        bcf="results/snps_merged/merged.bcf",
-        bcf_index="results/snps_merged/merged.bcf.csi",
-    params:
-        force_single=lambda w, input: "--force-single" if len(input.bcf) == 1 else ""
-    conda:
-        "../envs/bcftools.yaml"
-    log:
-        "logs/annotate/merge_snps.log"
-    shell:
-        "(bcftools merge -0 -m none {params.force_single} -O u --threads {threads} {input.bcf} | bcftools norm -m -both -O b -o {output.bcf} --write-index --threads {threads}) 2> {log}"
-
-
-rule generate_inhouse:
-    threads:
-        8
-    input:
-        calls="results/snps_merged/merged.bcf",
-    output:
-        bcf="results/snps_merged/merged.inhouse.bcf",
-        bcf_index="results/snps_merged/merged.inhouse.bcf.csi",
-    conda:
-        "../envs/bcftools.yaml"
-    log:
-        "logs/annotate/generate_inhouse.log"
-    shell:
-        "bcftools +fill-tags {input.calls} -- -t AC,AN,NS,AF,AC_Hom,AC_Het | bcftools view -G -O b -o {output.bcf} --write-index --threads {threads}"
+# In-house allele counts from the database built by the dna-seq-inhouse-db
+# pipeline (INHOUSE_N, INHOUSE_CARRIERS, INHOUSE_HET, INHOUSE_HOM, INHOUSE_LOWQUAL
+# and their _FRAC fractions). Its records are biallelic and left-aligned against
+# the same GRCh38 reference, matching the output of `normalize`. Variants absent
+# from the database get no INHOUSE_* tags, i.e. zero carriers.
+INHOUSE_DB = config.get(
+    "inhouse_db",
+    "/projects/humgen/core/database_inhouse_nanopore/results/inhouse_db/inhouse.bcf",
+)
 
 
 rule annotate_inhouse:
@@ -245,16 +221,23 @@ rule annotate_inhouse:
     input:
         calls="results/snps/{group}.annotated.cadd.bcf",
         calls_index="results/snps/{group}.annotated.cadd.bcf.csi",
-        database="results/snps_merged/merged.inhouse.bcf",
-        database_index="results/snps_merged/merged.inhouse.bcf.csi",
+        database=INHOUSE_DB,
+        database_index=f"{INHOUSE_DB}.csi",
     output:
         call="results/snps/{group}.annotated.inhouse.bcf",
         call_index="results/snps/{group}.annotated.inhouse.bcf.csi",
-    params:
-        info="inhouse_AN:=INFO/AN,inhouse_AF:=INFO/AF,inhouse_AC:=INFO/AC,inhouse_nhomalt:=INFO/AC_Hom"
     conda:
         "../envs/bcftools.yaml"
     log:
         "logs/annotate/{group}.inhouse.log"
+    resources:
+        mem_mb=4000
+    params:
+        info=",".join(
+            f"INFO/INHOUSE_{tag}{frac}"
+            for tag in ["N", "CARRIERS", "HET", "HOM", "LOWQUAL"]
+            for frac in (["", "_FRAC"] if tag != "N" else [""])
+        ),
     shell:
-        "bcftools annotate -a {input.database} {input.calls} -c CHROM,POS,REF,ALT,{params.info} --threads {threads} -O b -o {output.call} --write-index"
+        "bcftools annotate -a {input.database} -c {params.info} --pair-logic exact"
+        " --threads {threads} -O b -o {output.call} --write-index {input.calls} 2> {log}"
