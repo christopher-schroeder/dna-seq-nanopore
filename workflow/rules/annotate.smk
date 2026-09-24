@@ -243,8 +243,8 @@ rule annotate_inhouse:
     threads:
         8
     input:
-        calls="results/snps/{group}.annotated.gnomad.bcf",
-        calls_index="results/snps/{group}.annotated.gnomad.bcf.csi",
+        calls="results/snps/{group}.annotated.cadd.bcf",
+        calls_index="results/snps/{group}.annotated.cadd.bcf.csi",
         database="results/snps_merged/merged.inhouse.bcf",
         database_index="results/snps_merged/merged.inhouse.bcf.csi",
     output:

@@ -4,7 +4,7 @@ rule snps_table:
     output:
         "results/tables/{group}.snps.tsv"
     params:
-        expression=lambda wc: "CHROM, POS, REF, ALT, QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO['inhouse_AF'], INFO['inhouse_AC'], INFO['inhouse_nhomalt'], INFO['gnomad_AF'], INFO['gnomad_AC'], INFO['gnomad_nhomalt'], INFO['gnomad_AF_XX'], INFO['gnomad_AC_XX'], INFO['gnomad_nhomalt_XX']," + ", ".join(f"FORMAT['GT']['{s}'], FORMAT['AD']['{s}'][0], FORMAT['DP']['{s}']" for s in get_group_samples(wc.group))
+        expression=lambda wc: "CHROM, POS, REF, ALT, QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO['CADD_PHRED'], INFO['inhouse_AF'], INFO['inhouse_AC'], INFO['inhouse_nhomalt'], INFO['gnomad_AF'], INFO['gnomad_AC'], INFO['gnomad_nhomalt'], INFO['gnomad_AF_XX'], INFO['gnomad_AC_XX'], INFO['gnomad_nhomalt_XX']," + ", ".join(f"FORMAT['GT']['{s}'], FORMAT['AD']['{s}'][0], FORMAT['DP']['{s}']" for s in get_group_samples(wc.group))
     conda:
         "../envs/vembrane.yaml"
     benchmark:
@@ -23,7 +23,7 @@ rule snps_table_maf:
     output:
         "results/tables/{group}.snps.maf.{maf}.tsv"
     params:
-        expression=lambda wc: "CHROM, POS, REF, ALT, QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO['inhouse_AF'], INFO['inhouse_AC'], INFO['inhouse_nhomalt'], INFO['gnomad_AF'], INFO['gnomad_AC'], INFO['gnomad_nhomalt'], INFO['gnomad_AF_XX'], INFO['gnomad_AC_XX'], INFO['gnomad_nhomalt_XX']," + ", ".join(f"FORMAT['GT']['{s}'], FORMAT['AD']['{s}'][0], FORMAT['DP']['{s}']" for s in get_group_samples(wc.group))
+        expression=lambda wc: "CHROM, POS, REF, ALT, QUAL, CSQ['SYMBOL'], CSQ['Consequence'], CSQ['IMPACT'], CSQ['Feature'], INFO['CADD_PHRED'], INFO['inhouse_AF'], INFO['inhouse_AC'], INFO['inhouse_nhomalt'], INFO['gnomad_AF'], INFO['gnomad_AC'], INFO['gnomad_nhomalt'], INFO['gnomad_AF_XX'], INFO['gnomad_AC_XX'], INFO['gnomad_nhomalt_XX']," + ", ".join(f"FORMAT['GT']['{s}'], FORMAT['AD']['{s}'][0], FORMAT['DP']['{s}']" for s in get_group_samples(wc.group))
     conda:
         "../envs/vembrane.yaml"
     benchmark:

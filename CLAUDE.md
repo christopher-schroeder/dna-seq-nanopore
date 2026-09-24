@@ -29,6 +29,7 @@ None of these are created by a rule; the run fails without them.
   - `config.yaml` keys actually read by the code: `reference` (required, used to build `REFERENCE`), `basecalling_model` (`hac`/`sup`/`fast`, default `hac`), `jasmine` (bool, default `True`), `peddy` (bool, default `True` — whether the MultiQC report includes peddy), `vep` (optional GFF path for SV VEP), `methbat_regions` (required only if `methyl.smk` is re-enabled).
   - `units.tsv`: `sample_name`, `unit_name`, `fast5`. `samples.tsv`: `sample_name`, `group`, plus the *optional* pedigree columns `paternal_id`, `maternal_id`, `sex`, `phenotype` used to build peddy's PED (see QC below).
 - `results/resources/<reference>.fasta` — the reference FASTA must be placed there by hand. `reference.smk` only builds `.fai` and `.mmi` from it.
+- `/projects/humgen/tools/CADD-scripts-1.7.3` — the CADD v1.7 installation with its prebuilt conda/apptainer envs and GRCh38 annotation data, driven by `cadd.smk`. Override with `config["cadd_script"]`.
 - `resources/gnomad.genomes.v4.1.sites.vcf.gz` and `resources/gnomad.v4.1.sv.sites.no_chr.vcf.gz` (+ `.tbi`) — root-level `resources/`, hardcoded in `annotate.smk`. Note the SV database is the **no-chr-prefix** variant.
 - `/projects/humgen/science/depienne/ont1000g/results/hg38/raw/vcf_modified_unpacked/*.vcf` — 1000G control SVs. `jasmine.smk` runs `glob_wildcards` over this path **at parse time**; if the directory is unreachable the control list silently becomes empty rather than erroring.
 - `/local/work/cschroeder/snakemake-scratch/fs/` — local scratch on the execution node, hardcoded in the Clair3 rule.
@@ -58,7 +59,7 @@ FAST5/POD5 (units.tsv)
   → minimap2 → results/alignment/{sample}.cram
   → Clair3 (per sample, phased output) → results/snps_sample/{sample}.vcf.gz
       → whatshap haplotag → results/phased/{sample}.cram
-      → bcftools merge per group → normalize → VEP → gnomAD → inhouse → vembrane filter → table
+      → bcftools merge per group → normalize → VEP → gnomAD → CADD → inhouse → vembrane filter → table
   → Sniffles2 .snf per sample → joint call per group → filter by depth-derived read support
       → Jasmine merge with 1000G controls → control freqs → sample fixup
       → transform → VEP → transform back → gnomAD → simple repeats → table
@@ -84,12 +85,12 @@ FAST5/POD5 (units.tsv)
 | `visualization.smk` | vembrane TSV tables (SNP, SNP-MAF, SV, STR) |
 | `qc.smk` | NanoPlot, samtools stats/flagstat/idxstats, qualimap, peddy, multiqc |
 | `methyl.smk` | **`include:` is commented out in the Snakefile.** MethBat-based (pileup → profile → cohort → outliers) plus modkit phased pileup |
-| `cadd.smk` | Included but entirely commented out — a no-op |
+| `cadd.smk` | CADD v1.7 scoring of the group SNP calls (`CADD.sh` from `/projects/humgen/tools/CADD-scripts-1.7.3`) and `bcftools annotate` of `CADD_RAW`/`CADD_PHRED` |
 | `which_gpu.smk` | Not included anywhere |
 
 ## Named targets in the Snakefile
 
-`only_basecalling_units`, `only_basecalling`, `only_mapping`, `only_mapping_avail` (globs whatever `basecalls_sample/` already has), `only_clair`, `only_snp_calling`, `only_snp_vep`, `only_snp_gnomad`, `only_inhouse`, `only_snf`, `only_sv_calling`, `only_sv_annotated`, `only_sv_table`, `only_jasmine`, `only_jasmine_fix`, `only_download_controls`, `only_qc` (the full `results/qc/multiqc.html`), `only_nanoplot`, `only_peddy`, `test` (hardcoded sample names).
+`only_basecalling_units`, `only_basecalling`, `only_mapping`, `only_mapping_avail` (globs whatever `basecalls_sample/` already has), `only_clair`, `only_snp_calling`, `only_snp_vep`, `only_snp_gnomad`, `only_snp_cadd`, `only_inhouse`, `only_snf`, `only_sv_calling`, `only_sv_annotated`, `only_sv_table`, `only_jasmine`, `only_jasmine_fix`, `only_download_controls`, `only_qc` (the full `results/qc/multiqc.html`), `only_nanoplot`, `only_peddy`, `test` (hardcoded sample names).
 
 ## Implementation notes / gotchas
 
@@ -102,6 +103,8 @@ FAST5/POD5 (units.tsv)
 - **Jasmine on/off changes the SV graph**: `sv_transform_input()` in `annotate.smk` picks `{group}.jasmine_fix.vcf` when `config["jasmine"]` is true, else `{group}.filtered.vcf`.
 - **`fix_jasmine` strips the control samples** by keeping only header columns starting with `0` (Jasmine's first-input prefix) and stripping that 2-char prefix to recover real sample names.
 - **`ruleorder: annotate_snps_gnomad > index_bcf`** resolves the ambiguity on `*.bcf.csi`, and **`ruleorder: peddy_vcf > tabix`** the one on `*.vcf.gz.tbi`. Any new rule writing its own `.csi`/`.tbi` alongside its main output needs the same treatment — the generic `index_bcf`/`tabix` rules match every path.
+- **CADD runs a nested Snakemake/apptainer stack.** `cadd.smk` shells out to `CADD.sh`, which starts its own Snakemake run inside the apptainer images under `CADD-scripts-1.7.3/envs/apptainer`. Site apptainer config binds almost nothing, so the rule passes `--bind <CADD install dir>` explicitly; without it the inner jobs die on `$CADD/src/scripts/VCF2vepVCF.py: No such file or directory`. The `noanno` prescored folder is empty, so every variant is annotated and scored from scratch — this is the slowest rule in the SNP chain (hence 64 threads / 160 GB).
+- **CADD only covers `1-22,X,Y`.** `filter_primary_contigs` drops everything else before scoring, but `annotate_cadd` writes back onto the *full* gnomAD BCF, so MT and scaffold calls survive the chain with an empty `CADD_PHRED`.
 - Absolute `/projects/humgen/pipelines/dna-seq-nanopore/...` paths appear in `str_calling.smk` (`strling_to_vcf.py`), `annotate.smk` (`simple_repeats.tsv`/`.hdr.txt`) and `basecalling.smk` — the repo is not relocatable as-is.
 
 ## QC subworkflow
@@ -147,6 +150,6 @@ that collapse `<sample>.NanoStats` back to `<sample>` so every tool shares one r
 
 ## Stale files — do not treat as live code
 
-`workflow/rules/snp_calling.smk.bak`, `workflow/scripts/*.bak`/`*.bak2`, `workflow/rules/cadd.smk` (all commented), `which_gpu.smk` + `which_gpu_fabian.py` (not included), `scripts/dorado.py` (rule commented out), and the Borealis stack (`build_borealis_model.R`, `run_borealis_cohort.R`, `score_borealis_sample.R`, `modkit_to_bismark.py`, `workflow/containers/borealis.*`) — no rule references the Borealis/bismark path any more; methylation moved to MethBat. `workflow/tools/` vendors seven Dorado versions; only `dorado-2.0.0-linux-x64` is used.
+`workflow/rules/snp_calling.smk.bak`, `workflow/scripts/*.bak`/`*.bak2`, `which_gpu.smk` + `which_gpu_fabian.py` (not included), `scripts/dorado.py` (rule commented out), and the Borealis stack (`build_borealis_model.R`, `run_borealis_cohort.R`, `score_borealis_sample.R`, `modkit_to_bismark.py`, `workflow/containers/borealis.*`) — no rule references the Borealis/bismark path any more; methylation moved to MethBat. `workflow/tools/` vendors seven Dorado versions; only `dorado-2.0.0-linux-x64` is used.
 
 Large chunks of `snp_calling.smk` are a commented-out hand-rolled reimplementation of Clair3's internal stages (chunking, pileup, full-alignment, longphase). The live path is the single `clair3_call_variants` rule calling `run_clair3.sh`.

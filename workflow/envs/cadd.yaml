@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - cadd-scripts = 1.7.3
+  - snakemake = 9.19.0
+  - singularity

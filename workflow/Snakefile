@@ -127,6 +127,10 @@ rule only_snp_gnomad:
     input:
         expand("results/snps/{group}.annotated.gnomad.bcf", group=groups)
 
+rule only_snp_cadd:
+    input:
+        expand("results/snps/{group}.annotated.cadd.bcf", group=groups)
+
 rule only_snp_vep:
     input:
         expand("results/snps/{group}.annotated.vep.vcf.gz", group=groups)
