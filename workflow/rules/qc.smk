@@ -238,6 +238,7 @@ rule peddy:
         # peddy ships GRCh37 sites by default; "hg38" selects its GRCH38.sites,
         # which -- like this pipeline's reference -- is not chr-prefixed.
         sites="hg38",
+        basedir=BASEDIR,
     log:
         "logs/peddy/{group}.log"
     benchmark:
@@ -247,8 +248,12 @@ rule peddy:
     resources:
         mem_mb=16000,
     shell:
+        # Not plain `peddy`: 0.4.8 calls np.fromstring() on bytes, which NumPy 2
+        # removed, and dies half way through. scripts/run_peddy.py installs the
+        # one-line shim and then runs the very same CLI. See the script header
+        # for why envs/peddy.post-deploy.sh does not cover the containerised run.
         """
-        (peddy --plot \
+        (python {params.basedir}/scripts/run_peddy.py --plot \
             --procs {threads} \
             --sites {params.sites} \
             --prefix {params.prefix} \
