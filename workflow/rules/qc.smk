@@ -127,6 +127,10 @@ rule qualimap:
         -outdir {output.outdir} \
         -nt {threads} \
         --java-mem-size=80G
+        # MultiQC names the sample after the "bam file" line; /dev/stdin would
+        # collapse all samples into one called "stdin".
+        sed -i 's|bam file = /dev/stdin|bam file = {wildcards.sample}.bam|' \
+            {output.outdir}/genome_results.txt
         """
 
 
